@@ -5,49 +5,53 @@ This file defines the structural and coding standards for this project. All AI a
 ## Project Structure
 
 ```
-backend-template/
+wellnest-activity-engine/
 ├── pyproject.toml              # Modern dependency management (uv)
 ├── .pre-commit-config.yaml
 ├── .env.example
-├── alembic.ini                 # DB Migrations config
+├── alembic.ini                 # DB Migrations config (points to app/db)
 ├── app/
 │   ├── main.py                 # Entry point + Lifespan events
 │   ├── core/                   # Cross-cutting concerns
 │   │   ├── config.py           # Pydantic Settings
 │   │   ├── exceptions.py       # Custom HTTP exceptions
 │   │   ├── logging.py          # Rich logging setup
-│   │   └── security.py         # JWT + password hashing
+│   │   ├── security.py         # JWT + password hashing
+│   │   └── manifest.py         # Multimodal Manifest Pydantic models
 │   ├── db/                     # Database layer
-│   │   ├── session.py          # Engine & SessionLocal
-│   │   └── base.py             # The "Registry" file (imports all models)
+│   │   └── database.py         # Engine, AsyncSessionLocal, and Base
 │   ├── api/                    # API Layer
-│   │   └── v1/
-│   │       ├── router.py       # Switchboard - aggregates endpoints
-│   │       ├── dependencies.py # Bouncers (get_db, get_current_user)
-│   │       └── endpoints/      # API route handlers
-│   └── modules/                # PURE BUSINESS LOGIC (No API code!)
-│       ├── <domain>/
-│       │   ├── models.py       # Domain models
-│       │   ├── schemas.py      # Pydantic schemas
-│       │   └── service.py      # Business logic
+│   │   ├── routes/             # API route handlers
+│   │   │   ├── __init__.py     # Aggregates routes into api_router
+│   │   │   ├── auth.py
+│   │   │   └── users.py
+│   │   └── dependencies.py     # Auth & Context Bouncers (get_db, get_current_user)
+│   ├── services/               # Business logic / Orchestration
+│   │   ├── auth_service.py
+│   │   └── user_service.py
+│   ├── repositories/           # Data Access Layer (Direct DB queries)
+│   ├── models/                 # SQLAlchemy ORM Models
+│   │   └── user.py
+│   └── schemas/                # Shared Pydantic Schemas
+│       ├── auth.py
+│       └── user.py
 ├── tests/                      # Testing framework
-│   ├── conftest.py             # Shared fixtures
-│   ├── unit/                   # Unit tests
-│   └── integration/            # Integration tests
+│   ├── conftest.py             # Shared fixtures & DB overrides
+│   ├── unit/                   # Unit tests (Services & Logic)
+│   └── integration/            # Integration tests (API Endpoints)
 └── migrations/                 # Alembic migrations
 ```
 
 ## How to Add New Logic/Files
 
-1.  **New Domain Entity**:
-    - Create a folder in `app/modules/<domain>/`.
-    - Define models in `models.py`.
-    - Register models in `app/db/base.py`.
-    - Define schemas in `schemas.py`.
-    - Implement logic in `service.py`.
+1.  **New Domain Logic**:
+    - Define the model in `app/models/<domain>.py`.
+    - Create relevant schemas in `app/schemas/<domain>.py`.
+    - Implement persistence logic in `app/repositories/<domain>_repo.py`.
+    - Implement business orchestration in `app/services/<domain>_service.py`.
 2.  **New API Endpoints**:
-    - Create a router file in `app/api/v1/endpoints/<domain>.py`.
-    - Register the router in `app/api/v1/router.py`.
+    - Create a route file in `app/api/routes/<domain>.py`.
+    - Register the router in `app/api/routes/__init__.py`.
 3.  **New Configuration**:
     - Add to `app/core/config.py`.
 
@@ -98,3 +102,8 @@ Use custom exceptions from `app.core.exceptions`.
 
 ### No Inline Ignores
 Fix types at the source instead of using `# type: ignore`.
+
+
+### Run the application
+- `fastapi dev --reload --reload-exclude "test.db" --reload-exclude ".pytest_cache"`  # development
+- `fastapi run`           # for production

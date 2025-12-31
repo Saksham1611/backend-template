@@ -46,43 +46,43 @@ uv add --dev pytest pytest-asyncio httpx pytest-mock pre-commit ruff
 
 ```bash
 # Create the full project structure
-mkdir -p app/api/v1/endpoints
+mkdir -p app/api/routes
 mkdir -p app/core
 mkdir -p app/db
-mkdir -p app/modules/auth
-mkdir -p app/modules/users
-mkdir -p tests/unit
-mkdir -p tests/integration
+mkdir -p app/services
+mkdir -p app/models
+mkdir -p app/schemas
+mkdir -p app/repositories
+mkdir -p tests
 ```
 
 ### Final Structure
 
 ```
-wellnest-template/
+wellnest-activity-engine/
 ├── app/
 │   ├── api/
-│   │   └── v1/
-│   │       ├── endpoints/
-│   │       │   └── users.py
-│   │       ├── dependencies.py
-│   │       └── router.py
+│   │   ├── routes/
+│   │   │   ├── __init__.py
+│   │   │   └── users.py
+│   │   └── dependencies.py
 │   ├── core/
 │   │   ├── config.py
-│   │   └── logging.py
+│   │   ├── logging.py
+│   │   └── manifest.py
 │   ├── db/
-│   │   ├── base.py
-│   │   └── session.py
-│   ├── modules/
-│   │   ├── auth/
-│   │   └── users/
-│   │       ├── schemas.py
-│   │       └── service.py
+│   │   └── database.py
+│   ├── services/
+│   │   └── user_service.py
+│   ├── models/
+│   │   └── user.py
+│   ├── schemas/
+│   │   └── user.py
+│   ├── repositories/
 │   └── main.py
 ├── tests/
-│   ├── unit/
-│   ├── integration/
 │   └── conftest.py
-├── alembic/
+├── migrations/
 ├── .env
 ├── .pre-commit-config.yaml
 └── pyproject.toml
@@ -151,43 +151,39 @@ def setup_logging(level: str = "INFO"):
 
 This is the "Hybrid" trick to make Alembic work with modular files.
 
-### Step 3.1: Create `app/db/session.py`
+### Step 3.1: Create `app/db/database.py`
+
+> [!IMPORTANT]
+> This file is crucial for Alembic. Consolidates all database logic.
 
 ```python
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.ext.declarative import declarative_base
 from app.core.config import settings
 
 engine = create_async_engine(settings.DATABASE_URL, echo=False)
-SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
+AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
-class Base(DeclarativeBase):
-    pass
-```
+Base = declarative_base()
 
-### Step 3.2: Create `app/db/base.py` (The Registry)
-
-> [!IMPORTANT]
-> This file is crucial for Alembic. Import ALL models here so migrations can detect them.
-
-```python
-# Import the Base
-from app.db.session import Base
+async def get_db():
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
 
 # Import ALL models here so Alembic can "see" them
-# Example: from app.modules.auth.models import User  # noqa
+# from app.models.user import User  # noqa
 ```
 
 ---
 
-## 🧱 Phase 4: Business Modules
+## 🧱 Phase 4: Business Logic
 
-Create domain modules to encapsulate business logic. Each module contains:
-- `schemas.py` - Pydantic models for validation
-- `service.py` - Business logic (no API code)
-- `models.py` - SQLAlchemy models (optional)
+Create centralized directories for business logic components.
 
-### Step 4.1: Create `app/modules/users/schemas.py`
+### Step 4.1: Create `app/schemas/user.py`
 
 ```python
 from pydantic import BaseModel, EmailStr
@@ -206,12 +202,17 @@ class UserResponse(UserBase):
         from_attributes = True
 ```
 
-### Step 4.2: Create `app/modules/users/service.py`
+### Step 4.2: Create `app/services/user_service.py`
 
 > Pure business logic - no API/HTTP code here.
 
 ```python
+from sqlalchemy.ext.asyncio import AsyncSession
+
 class UserService:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
     async def create_user(self, data: dict):
         # Business logic simulation
         return {"id": 1, "email": data["email"], "is_active": True}
@@ -223,37 +224,40 @@ class UserService:
 
 Wire the business logic to HTTP endpoints using FastAPI Dependencies.
 
-### Step 5.1: Create `app/api/v1/dependencies.py`
+### Step 5.1: Create `app/api/dependencies.py`
 
 ```python
-from typing import Generator
-from app.db.session import SessionLocal
+from collections.abc import AsyncGenerator
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.db.database import AsyncSessionLocal
 
-async def get_db() -> Generator:
-    async with SessionLocal() as session:
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    async with AsyncSessionLocal() as session:
         yield session
 ```
 
-### Step 5.2: Create `app/api/v1/endpoints/users.py`
+### Step 5.2: Create `app/api/routes/users.py`
 
 ```python
 from fastapi import APIRouter, Depends
-from app.modules.users.schemas import UserCreate, UserResponse
-from app.modules.users.service import UserService
+from app.schemas.user import UserCreate, UserResponse
+from app.services.user_service import UserService
+from app.api.dependencies import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
-service = UserService()  # In real app, inject this
 
 @router.post("/", response_model=UserResponse)
-async def create_user(user_in: UserCreate):
+async def create_user(user_in: UserCreate, db: AsyncSession = Depends(get_db)):
+    service = UserService(db)
     return await service.create_user(user_in.model_dump())
 ```
 
-### Step 5.3: Create `app/api/v1/router.py` (The Switchboard)
+### Step 5.3: Create `app/api/routes/__init__.py` (The Switchboard)
 
 ```python
 from fastapi import APIRouter
-from app.api.v1.endpoints import users
+from app.api.routes import users
 
 api_router = APIRouter()
 api_router.include_router(users.router, prefix="/users", tags=["Users"])
@@ -272,7 +276,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from app.core.config import settings
 from app.core.logging import setup_logging
-from app.api.v1.router import api_router
+from app.api.routes import api_router
 import logging
 
 setup_logging()
@@ -317,7 +321,7 @@ Find and modify these sections:
 
 # ... imports ...
 from app.core.config import settings
-from app.db.base import Base  # <--- IMPORT THE REGISTRY
+from app.db.database import Base  # <--- IMPORT THE BASE
 
 # ... code ...
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)  # <--- USE SETTINGS
@@ -357,7 +361,7 @@ async def client():
 **Unit Test** (`tests/unit/test_user_service.py`):
 ```python
 import pytest
-from app.modules.users.service import UserService
+from app.services.user_service import UserService
 
 @pytest.mark.asyncio
 async def test_create_user():
@@ -514,10 +518,12 @@ uv run pre-commit run --all-files
 
 | Layer | Location | Responsibility |
 |-------|----------|----------------|
-| **API** | `app/api/v1/` | HTTP routing, request/response handling |
+| **API** | `app/api/` | HTTP routing, request/response handling |
 | **Core** | `app/core/` | Config, logging, shared utilities |
-| **DB** | `app/db/` | Database session, model registry |
-| **Modules** | `app/modules/` | Domain logic (schemas, services, models) |
+| **DB** | `app/db/` | Database session and models |
+| **Logic** | `app/services/` | Domain orchestration |
+| **Data** | `app/models/` | SQLAlchemy ORM Models |
+| **Validation** | `app/schemas/` | Pydantic Schemas |
 | **Tests** | `tests/` | Unit and integration tests |
 
 ### Key Principles

@@ -4,8 +4,8 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.api.v1.dependencies import get_db
-from app.db.base import Base
+from app.api.dependencies import get_db
+from app.db.database import Base
 from app.main import app
 
 # Use an in-memory SQLite database for tests

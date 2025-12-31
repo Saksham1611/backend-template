@@ -8,7 +8,7 @@ A production-ready FastAPI backend template using Hybrid Modular Architecture.
 - **SQLAlchemy (Async)**: Modern ORM with async support.
 - **Alembic**: Database migrations.
 - **Pydantic v2**: Data validation and settings.
-- **Modular Architecture**: Clean separation of business logic and API layer.
+- **Simplified Architecture**: Flattened project structure for faster development and easier maintenance.
 - **Rich Logging**: Beautiful console logs.
 - **Testing**: Pytest with async client and DB support.
 - **Code Quality**: Ruff, Mypy, and pre-commit hooks.
@@ -31,18 +31,16 @@ A production-ready FastAPI backend template using Hybrid Modular Architecture.
    ```
 3. Create alembic config:
    ```bash
-   alembic init migrations
+   alembic init alembic
    ```
 4. Start development server:
    ```bash
-   uv run uvicorn app.main:app --reload
+   fastapi dev --reload --reload-exclude "test.db" --reload-exclude ".pytest_cache"
    ```
 5. Run migrations (optional):
    ```bash
    uv run alembic upgrade head
    ```
-
-
 
 ### Testing
 
@@ -57,6 +55,3 @@ Run linters and formatting:
 ```bash
 uv run pre-commit run --all-files
 ```
-
-> FYI, the auth and users modules are for testing purposes only.
-> ❗️ **Note**: Details on how to use the add modules and how to structure your project can be found in the `Guidelines` folder.

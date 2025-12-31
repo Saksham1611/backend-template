@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    APP_NAME: str = "Wellnest Template Service"
+    APP_NAME: str = "WNG Activity Engine"
     ENVIRONMENT: Literal["local", "dev", "prod"] = "local"
     API_V1_PREFIX: str = "/api/v1"
 
