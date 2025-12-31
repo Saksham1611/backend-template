@@ -29,21 +29,27 @@ A production-ready FastAPI backend template using Hybrid Modular Architecture.
    ```bash
    uv sync
    ```
-3. Run migrations:
+3. Create alembic config:
    ```bash
-   uv run alembic upgrade head
+   alembic init migrations
    ```
 4. Start development server:
    ```bash
    uv run uvicorn app.main:app --reload
    ```
+5. Run migrations (optional):
+   ```bash
+   uv run alembic upgrade head
+   ```
+
+
 
 ### Testing
 
 Run all tests:
-```bash
-uv run pytest
-```
+   ```bash
+   uv run pytest
+   ```
 
 ### Code Quality
 
@@ -51,3 +57,6 @@ Run linters and formatting:
 ```bash
 uv run pre-commit run --all-files
 ```
+
+> FYI, the auth and users modules are for testing purposes only.
+> ❗️ **Note**: Details on how to use the add modules and how to structure your project can be found in the `Guidelines` folder.
